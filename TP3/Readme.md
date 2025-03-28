@@ -131,10 +131,234 @@ Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
 Support MariaDB developers by giving a star at https://github.com/MariaDB/server
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
 
-MySQL [dummy_database]>```
+MySQL [dummy_database]>
+
+```
 
 ## Part 2
 
 Ma chambre est pas rangée. RIP. Elle est toujours dans un état désastreux.
 
 ## Part 3
+
+#### 1. Le ène-jaïne-ixe.
+
+
+> virtual_hosts.yml
+
+```yaml
+
+- name: ène-jaïne-ixe
+  become: true
+  template:
+    src: virtual_host.conf.j2
+    dest: /etc/nginx/conf.d/{{ item.nginx_servername }}.conf
+  loop: "{{ vhosts }}"
+  notify: Restart Nginx
+
+- name: vhost folders
+  become: true
+  file:
+    path: "{{ item.nginx_webroot }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  loop: "{{ vhosts }}"
+
+- name: dummy index html foreach 
+  become: true
+  copy:
+    dest: "{{ item.nginx_webroot }}/index.html"
+    content: "{{ item.nginx_index_content }}"
+    owner: www-data
+    group: www-data
+    mode: '0744'
+  loop: "{{ vhosts }}"
+  
+  ```
+
+
+> virtual_hosts.conf.j2
+
+
+```jinja
+server {
+    listen {{ item.nginx_port }};
+    server_name {{ item.nginx_servername }};
+    root {{ item.nginx_webroot }};
+
+    location / {
+        index index.html;
+    }
+}
+```
+
+> handlers/main.yaml
+
+```yaml
+- name: reload ène-jaïne-ixe
+  become: true
+  service:
+    name: nginx
+    state: reload
+```
+
+#### 2. users ? users. (Common)
+
+create_users.yml
+
+```yaml
+
+- name: create users with ssh access
+  become: true
+  block:
+    - name: create users
+      user:
+        name: "{{ item.username }}"
+        state: present
+        password: "{{ item.password }}"
+        home: "/home/{{ item.username }}"
+        shell: /bin/bash
+        groups: admin
+        append: true
+      loop: "{{ users }}"
+
+    - name: .ssh ?
+      file:
+        path: "/home/{{ item.username }}/.ssh"
+        state: directory
+        owner: "{{ item.username }}"
+        group: "{{ item.username }}"
+        mode: '0700'
+      loop: "{{ users }}"
+
+    - name: hop adding ssh key to authorized
+      copy:
+        dest: "/home/{{ item.username }}/.ssh/authorized_keys"
+        content: "{{ item.ssh_key }}"
+        owner: "{{ item.username }}"
+        group: "{{ item.username }}"
+        mode: '0600'
+      loop: "{{ users }}"
+    
+```
+
+--- 
+
+Là j'me suis endormi
+
+```yml
+rgjoemqivqoi m
+e tbd
+
+
+
+
+e qvf ez v
+
+qvfs
+ 
+ vfsgzet)-i
+ ```
+
+ --- 
+
+`4.212.13.80.yml`
+
+```yml
+
+users:
+  - name: roberto
+    username: roberto
+    password: un password
+    ssh_key: ssh-rsa ma clé
+  - name: marco
+    username: marco
+    password: un password
+    ssh_key: ssh-rsa ma clé
+
+```
+
+#### Dynamic loadbalancer
+
+Une 3eme machine 
+
+```json
+
+resource "azurerm_linux_virtual_machine" "la_troisieme_machine" {
+  name                = "${var.prefix}-vm3"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  size                = "Standard_B2s"
+  admin_username      = "onelots"
+  
+  network_interface_ids = [azurerm_network_interface.internal_vm3.id]
+
+  admin_ssh_key {
+    username   = "onelots"
+    public_key = file("~/.ssh/id_rsa.pub")
+  }
+
+  os_disk {
+    storage_account_type = "Standard_LRS"
+    caching              = "ReadWrite"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+
+  custom_data = filebase64("cloud-init.txt")
+}```
+
+reverse_proxy.yml
+
+```yml
+
+- name: reverse_proxy
+  hosts: reverseproxy
+  become: true
+
+  tasks:
+  - name: Install nginx
+    apt:
+      name: nginx
+      state: present
+
+  - name: copy file
+    become: true
+    template:
+      src: reverse_proxy.conf.j2
+      dest: /etc/nginx/conf.d/rproxy.conf
+
+  - name: delete default website
+    file:
+      path: /etc/nginx/sites-enabled/default
+      state: absent
+  
+  - name: Start NGiNX
+    service:
+      name: nginx
+      state: started
+```
+
+jinja conf pour le reverseproxy (reverse_proxy.conf.j2)
+
+```
+upstream onelots {
+{% for ip in groups['webapp'] %}
+    server {{ ip }};
+{%  %}
+}
+
+server {
+    server_name onelots.com;
+
+    location / {
+        proxy_pass http://onelots;
+    }
+}
