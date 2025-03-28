@@ -135,4 +135,6 @@ MySQL [dummy_database]>```
 
 ## Part 2
 
+Ma chambre est pas rangée. RIP. Elle est toujours dans un état désastreux.
+
 ## Part 3
